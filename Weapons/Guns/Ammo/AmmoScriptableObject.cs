@@ -13,9 +13,11 @@ namespace Weapons.Guns.Ammo
     {
         public float maxDuration;
         
+        public AmmoType ammoType = AmmoType.Default;
+        
         public float TimeLeft { get; set; }
 
-        private void Awake()
+        protected virtual void Awake()
         {
             ResetTimeLeft();
             

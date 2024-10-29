@@ -1,6 +1,7 @@
 using UnityEditor;
 using UnityEngine;
 
+    /*
 namespace EditorScripts
 {
 
@@ -38,4 +39,5 @@ namespace EditorScripts
     }
     
 }
+*/
 

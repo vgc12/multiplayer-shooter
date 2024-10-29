@@ -12,7 +12,7 @@ GameObject:
   - component: {fileID: 568484363186959510}
   - component: {fileID: 4732630409231625806}
   - component: {fileID: 155547898417225061}
-  m_Layer: 0
+  m_Layer: 3
   m_Name: HitEffect 1
   m_TagString: Untagged
   m_Icon: {fileID: 0}
@@ -4928,7 +4928,7 @@ MonoBehaviour:
   m_Script: {fileID: 11500000, guid: d5a57f767e5e46a458fc5d3c628d0cbb, type: 3}
   m_Name: 
   m_EditorClassIdentifier: 
-  GlobalObjectIdHash: 0
+  GlobalObjectIdHash: 2137759158
   InScenePlacedSourceGlobalObjectIdHash: 0
   AlwaysReplicateAsRoot: 0
   SynchronizeTransform: 1
@@ -4948,7 +4948,7 @@ GameObject:
   - component: {fileID: 5287782473163739987}
   - component: {fileID: 276602181412851504}
   - component: {fileID: 2972507867856640728}
-  m_Layer: 0
+  m_Layer: 3
   m_Name: Decal
   m_TagString: Untagged
   m_Icon: {fileID: 0}
@@ -9859,7 +9859,7 @@ GameObject:
   - component: {fileID: 2792254548640270911}
   - component: {fileID: 1562154219986742530}
   - component: {fileID: 2372329154734436124}
-  m_Layer: 0
+  m_Layer: 3
   m_Name: Sparks
   m_TagString: Untagged
   m_Icon: {fileID: 0}
@@ -9876,7 +9876,7 @@ Transform:
   serializedVersion: 2
   m_LocalRotation: {x: -0, y: -0, z: 0, w: 1}
   m_LocalPosition: {x: 0, y: 0, z: 0}
-  m_LocalScale: {x: 1, y: 1, z: 1}
+  m_LocalScale: {x: 6.7844987, y: 6.7844987, z: 6.7844987}
   m_ConstrainProportionsScale: 0
   m_Children: []
   m_Father: {fileID: 4411714827845421482}
@@ -14546,7 +14546,7 @@ GameObject:
   - component: {fileID: 5533285005058260143}
   - component: {fileID: 3728078184188183779}
   - component: {fileID: 3050949528132971727}
-  m_Layer: 0
+  m_Layer: 3
   m_Name: Dust
   m_TagString: Untagged
   m_Icon: {fileID: 0}

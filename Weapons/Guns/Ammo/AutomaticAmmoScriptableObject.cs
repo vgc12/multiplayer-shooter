@@ -1,4 +1,5 @@
 ﻿using UnityEngine;
+using Weapons.Guns.ScriptableObjects;
 
 namespace Weapons.Guns.Ammo
 {
@@ -6,6 +7,13 @@ namespace Weapons.Guns.Ammo
     public class AutomaticAmmoScriptableObject : AmmoScriptableObject
     {
         public float fireRate = 0.5f;
+        
+        protected override void Awake()
+        {
+            base.Awake();
+            ammoType = AmmoType.Automatic;
+        }
+        
         
     }
 }

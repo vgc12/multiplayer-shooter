@@ -2,11 +2,12 @@
 
 using System;
 using System.Collections;
-using EditorScripts;
+//using EditorScripts;
 using EventChannels;
-using Unity.Multiplayer.Samples.Utilities.ClientAuthority;
+using UI;
 using Unity.Netcode;
 using Unity.Netcode.Components;
+
 using UnityEngine;
 using UnityEngine.InputSystem;
 using Utilities;
@@ -19,22 +20,21 @@ namespace Player
         [Header("Shared")]
         private PlayerInputActions _playerInputActions;
         private Rigidbody _rb;
+        private GenericEventChannelScriptableObject<PauseEvent> _pauseEventChannel;
+
 
         [Header("Movement")] 
         [SerializeField] private float sprintSpeed;
-
-        [SerializeField] private float walkSpeed;
+   
+        
         private float _speed;
         [SerializeField]
         private float speedMultiplier = 10f;
-        [SerializeField]
-        private Transform orientation;
+        public Transform orientation;
         public Vector3 MoveDirection { get; private set; }
+        public Vector2 MoveInput { get; private set; }
         public float wallRunSpeed;
-        public bool isWallRunning;
-        private MovementState _movementState;
-        private bool _sprinting;
-        
+     
         [Header("Slope Detection")]
         [SerializeField]
         private float maxSlopeAngle = 35f;
@@ -42,9 +42,8 @@ namespace Player
         private bool _exitingSlope = false;
 
         [Header("Jumping")]
-        [SerializeField]
-        [Range(0.0f, 2f)]
-        private float heightMultiplier = 1.5f;
+
+
         //[ScriptableObjectDropdown]
         [SerializeField]
         private PlayerGamePlayInfoScriptableObject playerGamePlayInfo;
@@ -58,17 +57,18 @@ namespace Player
         private readonly Collider[] _crouchColliders = new Collider[1];
         [SerializeField] private LayerMask crouchIgnoreMask;
 
-        [SerializeField]private int _dashesRemaining;
+        [SerializeField]private int dashesRemaining;
 
-        public bool isCrouched = true;
+       
         [SerializeField] private Transform crouchTransform;
-        [SerializeField] private float crouchHeight = 0.5f;
+   
         private float _initialHeight;
         
         [Header("Dashing")]
         [SerializeField] private int maxDashes =3;
         [SerializeField] private float dashRegenTime = 2f;
-        [SerializeField] private GenericEventChannelScriptableObject<PlayerHitEvent> playerHitEventChannel;
+        [SerializeField] private float dashForce = 100f;
+        private GenericEventChannelScriptableObject<PlayerDeathEvent> _playerDeathEventChannel;
         private float _dashTimer;
         
         [Header("Ground Detection")]
@@ -82,17 +82,33 @@ namespace Player
         [SerializeField] private float groundDrag = 6f;
         [SerializeField] private float airDrag = 2f;
 
-       
+        private Vector3 _networkPosition;
+        private Vector3 _networkVelocity;
+        private Vector3 _estimatedPosition;
+        [SerializeField] private float positionErrorThreshold;
+  
       
         public bool Sliding { get; set; }
+        
+        public bool Crouching { get; set; }
+        public bool Moving { get; private set; }
+        public bool WallRunning { get; set; }
+        
+   
 
+        private bool _isPaused;
+        
+
+
+        
         public override void OnNetworkSpawn()
         { 
-            crouchTransform.GetComponent<Renderer>().material.color = Color.red;
-            if (IsOwner) return;
-            
-            enabled = false;
-          
+           // crouchTransform.GetComponent<Renderer>().material.color = Color.red;
+
+            if (!IsOwner)
+            {
+                enabled = false;
+            }
         }
 
         
@@ -101,20 +117,24 @@ namespace Player
         private void Awake()
         {
             
-            playerHitEventChannel.OnEventRaised += OnPlayerHit;
             _rb = GetComponent<Rigidbody>();
             _rb.freezeRotation = true;
 
             _playerInputActions = new PlayerInputActions();
-      
             _playerInputActions.Player.Enable();
+        
             _playerInputActions.Player.Jump.performed += Jump;
-            _playerInputActions.Player.Sprint.canceled +=
-                _ => Dash();
-            _initialHeight = crouchTransform.localScale.y;
+            _playerInputActions.Player.Sprint.canceled += Dash;
+            _playerDeathEventChannel = EventChannelAccessor.Instance.playerDeathEventChannel;
+            _playerDeathEventChannel.OnEventRaised += OnPlayerKilled;
+            
 
+            //_initialHeight = crouchTransform.localScale.y;
+            _pauseEventChannel = EventChannelAccessor.Instance.gamePausedEventChannel;
+            _pauseEventChannel.OnEventRaised += OnPause;
+            
 
-            _speed = walkSpeed;
+            _speed = sprintSpeed;
             _rootTransformHeight = transform.localScale.y;
             _readyToJump = true;
             _isGrounded = true;
@@ -123,52 +143,53 @@ namespace Player
 
         }
 
+       
+        private void OnPause(PauseEvent pauseEvent)
+        {
+            if(!IsOwner || pauseEvent.PlayerId != OwnerClientId)
+                return;
+            
+            _isPaused = pauseEvent.IsPaused;
+            
+        }
+
         private void Start()
         {
-            _rb.collisionDetectionMode = CollisionDetectionMode.Continuous;
+            _rb.collisionDetectionMode = CollisionDetectionMode.ContinuousDynamic;
         }
 
-        private void OnPlayerHit(PlayerHitEvent arg0)
+        private void OnPlayerKilled(PlayerDeathEvent playerDeathEvent)
         {
-            if (arg0.KillerPlayerClientID == OwnerClientId)
+            /*
+            if (playerDeathEvent.KillerNetworkObjectReference.TryGet(out var networkObject, NetworkManager.Singleton) &&
+                networkObject.OwnerClientId == OwnerClientId)
             {
-                _dashesRemaining = 3;
+                dashesRemaining = 3;
             }
+            */
         }
 
-        private void Dash()
+        private void Dash(InputAction.CallbackContext ctx)
         {
-            if (_dashesRemaining <= 0 || isWallRunning) return;
-            _rb.AddForce(100 * orientation.forward, ForceMode.Impulse);
-            _dashesRemaining--;
+            if (dashesRemaining <= 0 || WallRunning || _isPaused) return;
+            _rb.AddForce(dashForce * orientation.forward, ForceMode.Impulse);
+            dashesRemaining--;
         }
 
-
+        
         private void StateHandler()
-        {
-            if (isWallRunning)
+        { 
+            if (WallRunning)
             {
-                _movementState = MovementState.WallRunning;
+              
                 _speed = wallRunSpeed * speedMultiplier;
             }
-            
-            else if (_sprinting)
-            {
-                _movementState = MovementState.Sprinting;
-                _speed = sprintSpeed * speedMultiplier;
-            }
-            
-            else if (isCrouched)
-            {
-                _movementState = MovementState.Crouching;
-                _speed = walkSpeed * speedMultiplier;
-            }
-            
             else
             {
-                _movementState = MovementState.Walking;
-                _speed = walkSpeed * speedMultiplier;
+             
+                _speed = sprintSpeed * speedMultiplier;
             }
+           
         }
 
   
@@ -176,15 +197,13 @@ namespace Player
 
         private void Jump(InputAction.CallbackContext ctx)
         {
-            if (ctx.performed && _readyToJump && _isGrounded && !isWallRunning)
-            {
-                _readyToJump = false;
-                _exitingSlope = true;
-                _rb.velocity = new Vector3(_rb.velocity.x, 0f, _rb.velocity.z);
-                _rb.AddForce(Vector3.up * jumpForce, ForceMode.Impulse);
+            if (!ctx.performed || !_readyToJump || !_isGrounded || WallRunning || _isPaused) return;
+            _readyToJump = false;
+            _exitingSlope = true;
+            _rb.linearVelocity = new Vector3(_rb.linearVelocity.x, 0f, _rb.linearVelocity.z);
+            _rb.AddForce(Vector3.up * jumpForce, ForceMode.Impulse);
          
-                StartCoroutine(ResetJump());
-            }
+            StartCoroutine(ResetJump());
         }
 
         private IEnumerator ResetJump()
@@ -199,9 +218,9 @@ namespace Player
         {
             _dashTimer += Time.deltaTime;
             
-            if (_dashTimer > dashRegenTime && _dashesRemaining < maxDashes)
+            if (_dashTimer > dashRegenTime && dashesRemaining < maxDashes)
             {
-                _dashesRemaining++;
+                dashesRemaining++;
                 _dashTimer = 0;
             }
             
@@ -211,17 +230,31 @@ namespace Player
             
         }
 
-        private void FixedUpdate() => MovePlayer();
-        
+        private void FixedUpdate()
+        {
+           
+            MovePlayer();
+          
+        }
+
+
 
         private void MovePlayer()
         {
-          
-            var direction = _playerInputActions.Player.Move.ReadValue<Vector2>();
-            if(!Sliding)
-                MoveDirection = (orientation.forward * direction.y) + (orientation.right * direction.x);
-            
-            
+        
+            if (!_isPaused)
+            {
+                 
+                 MoveInput = _playerInputActions.Player.Move.ReadValue<Vector2>();
+                 Moving = MoveInput != Vector2.zero;
+            }
+
+            if (!Sliding)
+            {
+                MoveDirection = (orientation.forward * MoveInput.y) + (orientation.right * MoveInput.x);
+                
+            }
+
             ControlSpeed();
             
             HandleFalling();
@@ -233,7 +266,7 @@ namespace Player
             {
                 _rb.AddForce(GetSlopeMovementDirection(MoveDirection) * _speed, ForceMode.Force);
 
-                if (_rb.velocity.y > 0)
+                if (_rb.linearVelocity.y > 0)
                 {
                    
                     _rb.AddForce(Vector3.down * 8f, ForceMode.Force);
@@ -241,7 +274,7 @@ namespace Player
             }
 
             // on ground
-            else if(_isGrounded && !isWallRunning)
+            else if(_isGrounded && !WallRunning)
                 _rb.AddForce(MoveDirection.normalized * _speed, ForceMode.Force);
 
             // in air
@@ -249,7 +282,7 @@ namespace Player
                 _rb.AddForce(MoveDirection.normalized * (_speed * airMultiplier), ForceMode.Force);
 
             // turn gravity off while on slope
-            if (!isWallRunning)
+            if (!WallRunning)
             {
                 _rb.useGravity = !OnSlope();
             }
@@ -258,23 +291,16 @@ namespace Player
 
         private void HandleFalling()
         {
-            if(_rb.velocity.y < 0 && !isWallRunning && !_isGrounded)
+            if(_rb.linearVelocity.y < 0 && !WallRunning && !_isGrounded)
             {
-                _rb.velocity += ((fallMultiplier - 1) * Physics.gravity.y * Time.deltaTime * Vector3.up).normalized;
+                _rb.linearVelocity += ((fallMultiplier - 1) * Physics.gravity.y * Time.deltaTime * Vector3.up).normalized;
             
             }
 
-            _rb.drag = _isGrounded ? groundDrag : airDrag;
+            _rb.linearDamping = _isGrounded ? groundDrag : airDrag;
         }
 
-        private void OnDrawGizmos()
-        {
-            Gizmos.color = Color.red;
-            var playerPosition = crouchTransform.position;
-            Gizmos.DrawLine(new Vector3(playerPosition.x, playerPosition.y + _initialHeight+.13f, playerPosition.z),
-                new Vector3(playerPosition.x, playerPosition.y + crouchHeight, playerPosition.z));
-            
-        }
+       
 
 
         private void ControlSpeed()
@@ -282,19 +308,19 @@ namespace Player
       
             if (OnSlope() && !_exitingSlope)
             {
-                if (_rb.velocity.magnitude > _speed)
-                    _rb.velocity = _rb.velocity.normalized * _speed;
+                if (_rb.linearVelocity.magnitude > _speed)
+                    _rb.linearVelocity = _rb.linearVelocity.normalized * _speed;
             }
 
             else
             {
-                Vector3 flatVel = new Vector3(_rb.velocity.x, 0f, _rb.velocity.z);
+                Vector3 flatVel = new Vector3(_rb.linearVelocity.x, 0f, _rb.linearVelocity.z);
 
                
                 if (flatVel.magnitude > _speed)
                 {
                     Vector3 limitedVel = flatVel.normalized * _speed;
-                    _rb.velocity = new Vector3(limitedVel.x, _rb.velocity.y, limitedVel.z);
+                    _rb.linearVelocity = new Vector3(limitedVel.x, _rb.linearVelocity.y, limitedVel.z);
                 }
             }
         }
@@ -318,20 +344,27 @@ namespace Player
             _playerInputActions.Player.Disable();
         }
         
-        private enum MovementState
+        private void OnEnable()
         {
-            Walking,
-            Sprinting,
-            Crouching,
-            Jumping,
-            WallRunning
+            _playerInputActions.Player.Enable();
         }
-
+        
+ 
+     
         public override void OnNetworkDespawn()
         {
             _rb.collisionDetectionMode = CollisionDetectionMode.Discrete;
             base.OnNetworkDespawn();
             
         }
+
+        public override void OnDestroy()
+        {
+            base.OnDestroy();
+            _playerInputActions.Player.Jump.performed -= Jump;
+            _playerInputActions.Player.Sprint.canceled -= Dash;
+            _playerDeathEventChannel.OnEventRaised -= OnPlayerKilled;
+            _pauseEventChannel.OnEventRaised -= OnPause;
+        }
     }
-    }
+}

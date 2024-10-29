@@ -11,7 +11,7 @@ GameObject:
   - component: {fileID: 2511646844367495162}
   - component: {fileID: 5479012262606332569}
   - component: {fileID: 5423377536703798591}
-  m_Layer: 0
+  m_Layer: 3
   m_Name: HitEffect
   m_TagString: Untagged
   m_Icon: {fileID: 0}
@@ -4925,7 +4925,7 @@ GameObject:
   - component: {fileID: 75583844460501984}
   - component: {fileID: 6725161413362722942}
   - component: {fileID: 7635662601887733995}
-  m_Layer: 0
+  m_Layer: 3
   m_Name: Sparks
   m_TagString: Untagged
   m_Icon: {fileID: 0}
@@ -9612,7 +9612,7 @@ GameObject:
   - component: {fileID: 5012941227369338021}
   - component: {fileID: 9032382992741361423}
   - component: {fileID: 2604025804400694321}
-  m_Layer: 0
+  m_Layer: 3
   m_Name: Dust
   m_TagString: Untagged
   m_Icon: {fileID: 0}

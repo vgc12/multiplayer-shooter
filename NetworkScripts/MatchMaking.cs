@@ -2,7 +2,7 @@ using System;
 using System.Collections;
 using System.Collections.Generic;
 using System.Threading.Tasks;
-using ParrelSync;
+
 using Unity.Netcode;
 using Unity.Netcode.Transports.UTP;
 using Unity.Networking.Transport.Relay;
@@ -24,7 +24,9 @@ namespace NetworkScripts
         private UnityTransport _transport;
         private string _playerId;
         private Lobby _connectedLobby;
-    
+
+        public bool IsLobbyHost => _connectedLobby != null && _connectedLobby.HostId == AuthenticationService.Instance.PlayerId;
+
         public const string LobbyCode = "j";
 
         public async void Awake()
@@ -53,11 +55,11 @@ namespace NetworkScripts
         {
             var options = new InitializationOptions();
            
-            
+            /*
 #if UNITY_EDITOR
             options.SetProfile(ClonesManager.IsClone() ? ClonesManager.GetArgument() : "Primary");
 #endif
-
+*/
 
         
             await UnityServices.InitializeAsync(options);
@@ -82,6 +84,7 @@ namespace NetworkScripts
 
                 var allocation = await RelayService.Instance.JoinAllocationAsync(lobby.Data[LobbyCode].Value);
             
+                
                 JoinAsClient(allocation);
             
                 return lobby;   
@@ -198,11 +201,11 @@ namespace NetworkScripts
             _transport.SetRelayServerData(relayServerData);
 
 
-            bool x = NetworkManager.Singleton.StartHost();
+            NetworkManager.Singleton.StartHost();
             NetworkManager.Singleton.SceneManager.LoadScene("Game1", LoadSceneMode.Single);
         }
 
-        private void OnDestroy()
+        private async void OnDestroy()
         {
             try
             {
@@ -211,17 +214,26 @@ namespace NetworkScripts
             
                 if (_connectedLobby.HostId == _playerId)
                 {
-                    Lobbies.Instance.DeleteLobbyAsync(_connectedLobby.Id);
+                   await Lobbies.Instance.DeleteLobbyAsync(_connectedLobby.Id);
 
                 }
                 else
                 {
-                    Lobbies.Instance.RemovePlayerAsync(_connectedLobby.Id, _playerId);
+                   await Lobbies.Instance.RemovePlayerAsync(_connectedLobby.Id, _playerId);
                 }
             }catch (Exception e)
             {
                 Debug.LogError(e.Message);
             }
+        }
+        
+     
+
+        public async void Disconnect()
+        {
+            if (_connectedLobby == null) return;
+            await Lobbies.Instance.RemovePlayerAsync(_connectedLobby.Id, _playerId);
+            
         }
     }
 }

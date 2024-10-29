@@ -3,7 +3,7 @@ using UnityEngine;
 
 namespace Weapons.Guns.ScriptableObjects
 {
-    [CreateAssetMenu(fileName = "Interact Event Channel", menuName = "Events/Interact Event Channel")]
+    [CreateAssetMenu(fileName = "Player Hit Event Channel", menuName = "Events/Player Hit Event Channel")]
     public class PlayerHitEventChannel : GenericEventChannelScriptableObject<PlayerHitEvent>
     {
       

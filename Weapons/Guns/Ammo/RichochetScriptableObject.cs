@@ -10,8 +10,14 @@ namespace Weapons.Guns.Ammo
     [CreateAssetMenu(fileName = "Ricochet Ammo Pickup", menuName = "Ammo Pick Ups/Ricochet Ammo Pickup", order = 1)]
     public class RicochetAmmoScriptableObject : AmmoScriptableObject
     {
-        
         public int maxReflections = 3;
+
+        protected override void Awake()
+        {
+            base.Awake();
+            ammoType = AmmoType.Ricochet;
+        }
+
 
         public override List<RaycastHit> OnHit(RaycastHit hit, Vector3 bulletDirection)
         {

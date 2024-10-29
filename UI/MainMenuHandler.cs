@@ -43,7 +43,6 @@ namespace UI
             InitializeUIScreens();
         
         
-           // SetupJoinGameUI();
             SetupServerBrowserUI();
             _currentElement = _serverBrowserElement;
             

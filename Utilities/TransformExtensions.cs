@@ -1,3 +1,4 @@
+using System.Collections;
 using UnityEngine;
 
 namespace Utilities
@@ -18,6 +19,20 @@ namespace Utilities
             {
                 child.ChangeLayerRecursively(layer);
             }
+        }
+        
+        public static IEnumerator Shake(this Transform transform, float duration, AnimationCurve curve)
+        {
+            Vector3 startPosition = transform.localPosition;
+            float t = 0;
+            while (t < duration)
+            {
+                t += Time.deltaTime;
+                float strength = curve.Evaluate(t / duration);
+                transform.localPosition = startPosition + Random.insideUnitSphere * strength;
+                yield return null;
+            }
+            transform.localPosition = startPosition;
         }
     }
 }

@@ -9,5 +9,9 @@ namespace Player
         public LayerMask wallLayerMask;
         [Tooltip("Layers that will be ignored when checking if there is an object above the player while uncrouching")]
         public LayerMask crouchIgnoreMask;
+
+        public LayerMask deathCameraMask;
+        public LayerMask defaultCameraMask;
+        public LayerMask groundSlamMask;
     }
 }

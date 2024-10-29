@@ -1,9 +1,10 @@
 using System.Collections;
+using System.Linq;
 using EventChannels;
-using Unity.Mathematics;
 using Unity.Multiplayer.Samples.Utilities.ClientAuthority;
 using Unity.Netcode;
 using UnityEngine;
+
 using Random = UnityEngine.Random;
 
 namespace Player
@@ -14,16 +15,23 @@ namespace Player
         public NetworkVariable<int> health = new(writePerm: NetworkVariableWritePermission.Server);
 
 
-        public GenericEventChannelScriptableObject<PlayerHitEvent> playerHitEventChannel;
+        [SerializeField] private GenericEventChannelScriptableObject<PlayerHitEvent> playerHitEventChannel;
         
+        [SerializeField] private GenericEventChannelScriptableObject<PlayerDeathEvent> playerDeathEventChannel;
         
-        public ushort maxHealth = 100;
+        [SerializeField] private GenericEventChannelScriptableObject<PlayerSpawnEvent> playerSpawnEventChannel;
+        
+        [SerializeField] private ushort maxHealth = 100;
     
-        private MeshRenderer[] _meshRenderers;
-    
-        private Collider[] _colliders;
+     
+
+        private GeneralPlayerInfo _playerInfo;
     
 
+
+        public GameObject playerDeathObject;
+
+        
         
         public override void OnNetworkSpawn()
         {
@@ -33,9 +41,10 @@ namespace Player
                 playerHitEventChannel.OnEventRaised += OnPlayerHit;
             }
 
-            _colliders = GetComponentsInChildren<Collider>();
-            _meshRenderers = GetComponentsInChildren<MeshRenderer>();
+       
+            _playerInfo = GetComponent<GeneralPlayerInfo>();
         
+            
             if (!IsOwner)
             {
                 enabled = false;
@@ -43,36 +52,39 @@ namespace Player
 
         }
 
-    private void OnPlayerHit(PlayerHitEvent playerHitEvent)
-    {
-        if (playerHitEvent.HitPlayerClientID == OwnerClientId)
+        private void OnPlayerHit(PlayerHitEvent playerHitEvent)
         {
-            DamagePlayer(100);
-        }
+            if (playerHitEvent.HitPlayerClientID == OwnerClientId)
+            {
+                DamagePlayer(playerHitEvent);
+            }
 
-    }
+        }
     
     
-        public void DamagePlayer(int damage)
+        public void DamagePlayer(PlayerHitEvent playerHitEvent)
         {
         
-            health.Value -= damage;
+            health.Value -= playerHitEvent.Damage;
             if (health.Value <= 0)
             {
-                Die();
+                StartCoroutine(Respawn(playerHitEvent));
             }
         }
 
-        private void Die()
-        {
-            StartCoroutine(Respawn());
-        }
+       
 
-        private IEnumerator Respawn()
+        private IEnumerator Respawn(PlayerHitEvent playerHitEvent)
         {
-            ToggleCollidersAndRendererClientRpc(false);
+            float respawnTime = 15f;
             
-            yield return new WaitForSeconds(3);
+           
+            LocalDeathEffectHandler.Instance.SpawnDeathModelClientRpc(playerHitEvent.ForceDirection,playerHitEvent.HitForce, playerHitEvent.HitPlayerClientID);
+            ToggleCollidersAndRendererClientRpc(false);
+            SendDeathEventOutClientRpc(playerHitEvent);
+            
+            yield return new WaitForSeconds(respawnTime);
+            SendSpawnEventClientRpc(playerHitEvent.HitPlayerClientID);
             ToggleCollidersAndRendererClientRpc(true);
           
             
@@ -80,28 +92,69 @@ namespace Player
             yield return null;
         }
 
+       
 
         [ClientRpc]
-        private void ToggleCollidersAndRendererClientRpc(bool toggle)
+        private void SendDeathEventOutClientRpc(PlayerHitEvent playerHitEvent)
         {
-            foreach (var col in _colliders)
-            {
-                col.enabled = toggle;
-            }
-
-
-            foreach (var meshRenderer in _meshRenderers)
-            {
-                meshRenderer.enabled = toggle;
-            }
-            GetComponent<Rigidbody>().isKinematic = !toggle;
+            if (OwnerClientId != playerHitEvent.HitPlayerClientID) return;
             
-            if (IsOwner)
+        
+            var hitPlayer = PlayerManager.Instance.players.First(p =>
+                p.GetComponent<NetworkObject>().OwnerClientId == playerHitEvent.HitPlayerClientID);
+            playerDeathEventChannel.RaiseEvent(new PlayerDeathEvent(
+                playerHitEvent.KillerPlayerNetworkObjectReference, playerHitEvent.HitPlayerClientID, hitPlayer));
+        }
+        
+        
+        
+        
+        
+        // use clientrpc params
+        [ClientRpc]
+        private void SendSpawnEventClientRpc(ulong respawningClientId, ClientRpcParams clientRpcParams = default)
+        {
+            if (OwnerClientId == respawningClientId)
             {
-                GetComponent<ClientNetworkTransform>().Teleport(PlayerManager.Instance.respawnPoints[Random.Range(0,PlayerManager.Instance.respawnPoints.Length)].position, quaternion.identity,
-                    new Vector3(transform.localScale.x, transform.localScale.y, transform.localScale.z));
-            
+                playerSpawnEventChannel.RaiseEvent(new PlayerSpawnEvent(respawningClientId));
             }
         }
+
+
+
+        [ClientRpc]
+        private void ToggleCollidersAndRendererClientRpc(bool isSpawning)
+        {
+            var rb = GetComponent<Rigidbody>();
+            rb.collisionDetectionMode = isSpawning ? CollisionDetectionMode.Continuous : CollisionDetectionMode.Discrete;
+            GetComponent<Rigidbody>().isKinematic = !isSpawning;
+           
+            
+        
+            if (!IsOwner )
+            {
+                _playerInfo.ToggleThirdPersonRenderers(isSpawning);
+                _playerInfo.ToggleThirdPersonColliders(isSpawning);
+                return;
+            }
+            
+            if (!isSpawning)
+            {
+                var respawnPosition =
+                    PlayerManager.Instance.respawnPoints[
+                        Random.Range(0, PlayerManager.Instance.respawnPoints.Length)];
+                GetComponent<ClientNetworkTransform>().Teleport(respawnPosition.position, respawnPosition.rotation,
+                    new Vector3(transform.localScale.x, transform.localScale.y, transform.localScale.z));
+            }
+            
+            
+            _playerInfo.ToggleFirstPersonRenderers(isSpawning);
+            _playerInfo.ToggleFirstPersonColliders(isSpawning);
+            
+        }
+        
+        
+        
+        
     }
 }
